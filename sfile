@@ -43,21 +43,21 @@ def start_server(device, channel, file, k):
         print('listen connection ...')
         try:
             client_sock, client_info = sock.accept()        
-            print(client_sock, int(client_info))
+            print(client_info[0])
             
             lecture_size = 1024 * k
-            chunk = file.get_size() // lecture_size +  file.get_size() % lecture_size
-            for _ in range(chunk):
+            chunk_size = (file.get_size() + lecture_size - 1) // lecture_size
+            for _ in range(chunk_size):
                 raw_data = file.read(lecture_size)
                 client_sock.send(raw_data)
-                print(f'sended {client_info} [{len(client_sock)}]')
-            client_sock.close()
+                print(f'sended {client_info} [{len(raw_data)}]')
         except KeyboardInterrupt:
             pass
         finally:
             print(f'close [{device}]')
-            file.close()
+            client_sock.close()
             sock.close()
+            file.close()
 
 def download_files(device, channel, k):
     with socket.socket(
