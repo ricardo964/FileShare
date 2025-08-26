@@ -1,0 +1,116 @@
+#!/bin/python3
+import argparse
+import socket
+import os
+
+class File:
+    def __init__(self, filename, created=False):
+        if not created:
+            self.size = os.stat(filename).st_size
+            try:
+                self.file = open(filename, 'rb')
+            except:
+                raise ValueError('Failed to get file')
+        else:
+            try:
+                self.file = open(filename, 'wb+')
+            except:
+                raise ValueError('Failed to get file')
+            self.size = 0
+    
+    def get_size(self):
+        return self.size
+    
+    def read(self, size):
+        return self.file.read(size)
+    
+    def write(self, buff):
+        self.file.write(buff)
+    
+    def close(self):
+        self.file.close()
+
+def start_server(device, channel, file, k):
+    with socket.socket(
+            socket.AF_BLUETOOTH,
+            socket.SOCK_STREAM,
+            socket.BTPROTO_RFCOMM
+        ) as sock:
+        
+        sock.bind((device, int(channel)))
+        sock.listen()
+        
+        print('listen connection ...')
+        try:
+            client_sock, client_info = sock.accept()        
+            print(client_sock, int(client_info))
+            
+            lecture_size = 1024 * k
+            chunk = file.get_size() // lecture_size +  file.get_size() % lecture_size
+            for _ in range(chunk):
+                raw_data = file.read(lecture_size)
+                client_sock.send(raw_data)
+                print(f'sended {client_info} [{len(client_sock)}]')
+            client_sock.close()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            print(f'close [{device}]')
+            file.close()
+            sock.close()
+
+def download_files(device, channel, k):
+    with socket.socket(
+            socket.AF_BLUETOOTH,
+            socket.SOCK_STREAM,
+            socket.BTPROTO_RFCOMM
+        ) as sock:
+            sock.connect((device, int(channel)))
+            print('connect to [{device}] ...')
+            file = File(device, created=True)
+            try:
+                lecture_size = 1024 * k
+                while True:
+                    raw_data = sock.recv(lecture_size)
+                    if not raw_data:
+                        break
+                    file.write(raw_data)
+            except KeyboardInterrupt:
+                pass
+            finally:
+                print(f'close [{device}]')
+                file.close()
+                sock.close()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        prog='sfile',
+        description='share file using bluetooth'
+    )
+    
+    parser.add_argument('-f', default="", required=False)
+    parser.add_argument('-d', help='device')
+    parser.add_argument('-c', default=3, help='declare channel')
+    parser.add_argument('-s', action='store_true', default=False)
+
+    parser_argv = parser.parse_args()
+    if not parser_argv.s and len(parser_argv.f) > 0:
+        print('In the client, you do not need to specify the shared file')
+        parser.print_help()
+        exit(1)
+    
+    if parser_argv.s:
+        _file = File(parser_argv.f)
+        start_server(
+            device=parser_argv.d,
+            channel=parser_argv.c,
+            file=_file,
+            k=1
+        )
+    else:
+        download_files(
+            device=parser_argv.d,
+            channel=parser_argv.c,
+            k=1
+        )
+        
